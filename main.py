@@ -1,12 +1,21 @@
 import cv2
 import sys
+import numpy as np
 
 
 def detect(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = resize(gray, 400)
+    gray = resize(gray, 500)
 
-    return gray
+    # Auto thresholds for now
+    sigma = 0.33
+    v = np.median(gray)
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+
+    edges = cv2.Canny(gray, lower, upper)
+
+    return edges
 
 def resize(img, width):
     h, w = img.shape
