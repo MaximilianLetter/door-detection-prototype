@@ -4,8 +4,8 @@ import numpy as np
 
 
 def detect(img):
+    img = resize(img, 500)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = resize(gray, 500)
 
     # Auto thresholds for now
     sigma = 0.33
@@ -15,10 +15,33 @@ def detect(img):
 
     edges = cv2.Canny(gray, lower, upper)
 
-    return edges
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 150)
+    # lines = cv2.HoughLinesP(edges, 1, np.pi/180, 150, 50, 20)
+    img = showLines(img, lines)
+
+    return img
+
+def showLines(img, lines):
+    for i in range(0, len(lines)):
+        # HoughLinesP or HoughLines
+        if len(lines[i][0]) == 4:
+            x1, y1, x2, y2 = lines[i][0]
+            cv2.line(img,(x1,y1),(x2,y2),(0,255,0),1)
+        else:
+            rho = lines[i][0][0]
+            theta = lines[i][0][1]
+            a = np.cos(theta)
+            b = np.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+            cv2.line(img, pt1, pt2, (0,0,255), 1, cv2.LINE_AA)
+
+    return img
 
 def resize(img, width):
-    h, w = img.shape
+    h, w = img.shape[:2]
     height = int(h * (width / w))
     dim = (width, height)
     resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
