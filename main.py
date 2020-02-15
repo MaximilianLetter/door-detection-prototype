@@ -15,11 +15,34 @@ def detect(img):
 
     edges = cv2.Canny(gray, lower, upper)
 
-    lines = cv2.HoughLines(edges, 1, np.pi/180, 150)
-    # lines = cv2.HoughLinesP(edges, 1, np.pi/180, 150, 50, 20)
+    img = houghOperations(img, edges)
+
+    return img
+
+def houghOperations(img, edges):
+    # Experiment extracting vertical and horizontal lines, standard Hough Transform
+    # lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
+    # vert_lines = [line for line in lines if (abs(line[0][1]) < 0.1 or abs(line[0][1]) > np.pi * 2 - 0.1)]
+    # hor_lines = [line for line in lines if (abs(line[0][1]) > (np.pi / 2)-0.1 and abs(line[0][1]) < (np.pi / 2) + 0.1)]
+    #
+    # img = showLines(img, vert_lines)
+    # img = showLines(img, hor_lines)
+
+    # Experiment extracting vertical and horizontal lines, probabilistic Hough Transform
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, 10, 100, 5)
+
+    # straight_lines = [l for l in lines if direction(l[0][0], l[0][1], l[0][2], l[0][3]) == 0]
+    # img = showLines(img, straight_lines)
+
     img = showLines(img, lines)
 
     return img
+
+def direction(x1, y1, x2, y2):
+    dir = 0
+    if x1 != x2:
+        dir = (2 / np.pi) * np.arctan(abs(y2-y1) / abs(x2-x1))
+    return dir
 
 def showLines(img, lines):
     for i in range(0, len(lines)):
