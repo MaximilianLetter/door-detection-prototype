@@ -15,7 +15,34 @@ def detect(img):
 
     edges = cv2.Canny(gray, lower, upper)
 
-    img = houghOperations(img, edges)
+    # OPTION 1: Hough Transform for extracting lines
+    # img = houghOperations(img, edges)
+
+    # OPTION 2: LSD LineSegmentDetector
+    # NOTE: Was removed in OpenCV 4.1.0+
+    # img = lsdOperations(gray)
+
+    # Option 3: FLD FastLineDetector
+    # img = fldOperations(gray)
+
+    # Option 4: Saliency [multiple saliency objects exist]
+    # sal = cv2.saliency.StaticSaliencySpectralResidual_create()
+    # sal = cv2.saliency.StaticSaliencyFineGrained_create()
+    # success, img = sal.computeSaliency(img)
+
+    return img
+
+def fldOperations(img):
+    fld = cv2.ximgproc.createFastLineDetector()
+    lines = fld.detect(img)
+    img = fld.drawSegments(img, lines)
+
+    return img
+
+def lsdOperations(img):
+    lsd = cv2.createLineSegmentDetector(0)
+    lines = lsd.detect(img)[0]
+    img = lsd.drawSegments(img, lines)
 
     return img
 
