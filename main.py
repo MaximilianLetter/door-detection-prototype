@@ -354,6 +354,8 @@ def single(path):
     img = detect(img)
 
     cv2.imshow('frame', img)
+    cv2.imwrite('results/' + path + '.jpg', img)
+
     ch = cv2.waitKey(0)
 
 
