@@ -5,7 +5,7 @@ import math
 
 
 def detect(img):
-    img = resize(img, 240)
+    img = resize(img, 120)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     blurred = cv2.GaussianBlur(gray, (5,5), 0.8)
@@ -26,7 +26,7 @@ def detect(img):
     # img = lsdOperations(gray)
 
     # Option 3: FLD FastLineDetector
-    img = fldOperations(gray)
+    # img = fldOperations(gray)
 
     # Option 4: Saliency [multiple saliency objects exist]
     # sal = cv2.saliency.StaticSaliencySpectralResidual_create()
@@ -34,7 +34,12 @@ def detect(img):
     # success, img = sal.computeSaliency(img)
 
     # Option 5: Corners
-    # img = useCorners(img, edges)
+    img = useCorners(img, edges)
+
+    # ctest1 = [1, 0]
+    # ctest2 = [0, 600]
+    #
+    # print(np.rad2deg(getOrientation(ctest1, ctest2)))
 
     return img
 
@@ -46,45 +51,122 @@ def useCorners(img, edges):
     print(len(corners))
 
     # TODO
-    c_groups = groupCorners(corners)
+    c_groups = groupCorners(corners, edges)
 
-    print(len(c_groups))
-    for g in c_groups[0]:
-        for c in g:
-            x, y = c.ravel()
-            cv2.circle(img, (x, y), 3, (0, 255, 0), -1)
+    # DRAW DOOR POSTS
+    # for g in c_groups:
+    #     c1 = tuple(g[0])
+    #     c2 = tuple(g[1])
+    #     cv2.line(img, c1, c2, (0, 255, 0))
+
+    for g in c_groups:
+        pts = np.array([g], np.int32)
+        pts = pts.reshape((-1,1,2))
+        cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     return img
 
 # TODO
-def groupCorners(corners):
-    groups = []
-    # Grouping algorithm not imlemented yet
-    for c1 in corners:
-        x1, y1 = c1.ravel()
-        group = [c1]
-        for c2 in corners:
-            x2, y2 = c2.ravel()
+def groupCorners(corners, img):
+    height, width = img.shape[:2]
+    print('SHAPE', height, width)
 
-            size = math.sqrt((x2-x1)**2 + (y2-y1)**2)/400
-            if size > 1 or size < 0:
+    THRESH_DIST_MAX = height * 0.8
+    THRESH_DIST_MIN = height * 0.4
+
+    # Goal is as high as possible somehow
+    THRESH_ORI_MAX = 180
+    THRESH_ORI_MIN = 54
+
+    doorPosts = []
+
+    done = np.zeros(len(corners))
+
+    # Assuming that door posts are almost vertical
+    for i, c1 in enumerate(corners):
+        c1 = c1.ravel()
+        for j, c2 in enumerate(corners):
+
+            # Filter out duplicates
+            if done[j] == True:
                 continue
 
-            # dir = np.cross(math.atan(abs(x2-x1)/abs(y2-y1)), 180/np.pi)
-            if (y2-y1) == 0:
-                dir = 0
-            else:
-                dir = math.atan(abs(x2-x1)/abs(y2-y1)) * 180/np.pi
-            if dir > 90 or dir < 0:
+            c2 = c2.ravel()
+
+            distance = getDistance(c1, c2)
+            if distance < THRESH_DIST_MIN or distance > THRESH_DIST_MAX:
                 continue
 
-            group.append(c2)
-            if len(group) == 4:
-                break
+            orientation = np.degrees(getOrientation(c1, c2))
+            if orientation < THRESH_ORI_MIN or orientation > THRESH_ORI_MAX:
+                continue
 
-        groups.append(group)
+            # sort so that the high point is always the first
+            group = sorted([c1, c2], key=lambda k: [k[1], k[0]])
 
-    return groups
+            doorPosts.append(group)
+
+        # after all possibilities with c1 are done delete it
+        done[i] = True
+
+    print('DOORPOSTS', len(doorPosts))
+
+    THRESH_DIST_MAX = THRESH_DIST_MAX * 0.5
+    THRESH_DIST_MIN = THRESH_DIST_MIN * 0.5
+
+    THRESH_ORI_MAX = 20
+
+    cornerGroups = []
+    done = np.zeros(len(doorPosts))
+
+    # Possible door posts are collected, try to join them together
+    for i, line1 in enumerate(doorPosts):
+        c11, c12 = line1
+        length1 = getDistance(c11, c12)
+        for j, line2 in enumerate(doorPosts):
+
+            # Filter out duplicates
+            if done[j] == True:
+                continue
+
+            c21, c22 = line2
+            length2 = getDistance(c21, c22)
+
+            # if one of the points is the same -> continue
+            if np.array_equal(c11, c21) or np.array_equal(c12, c22):
+                continue
+
+            # if the length of door posts is too different -> continue
+            lengthDiff = abs(length1 - length2)
+            if lengthDiff > length1 * 0.25 or lengthDiff > length2 * 0.25:
+                continue
+
+            distance = getDistance(c11, c21)
+            if distance < THRESH_DIST_MIN or distance > THRESH_DIST_MAX:
+                continue
+
+            distance = getDistance(c12, c22)
+            if distance < THRESH_DIST_MIN or distance > THRESH_DIST_MAX:
+                continue
+
+            orientation = np.degrees(getOrientation(c11, c21))
+            if orientation > THRESH_ORI_MAX:
+                continue
+
+            orientation = np.degrees(getOrientation(c12, c22))
+            if orientation > THRESH_ORI_MAX:
+                continue
+
+            # sort to draw door candidate
+            group = [c11, c21, c22, c12]
+            cornerGroups.append(group)
+
+        # doorpost i does not need further testing
+        done[i] = True
+
+    print('CORNERGROUPS', len(cornerGroups))
+
+    return cornerGroups
 
 def fldOperations(img):
     fld = cv2.ximgproc.createFastLineDetector()
@@ -202,7 +284,16 @@ def getDistance(p1, p2):
     x2, y2 = p2
     return np.sqrt((x1-x2)**2 + (y1-y2)**2)
 
-def getOrientation(line):
+def getOrientation(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+
+    dir = 179
+    if x1 != x2:
+        dir = (2 / np.pi) * np.arctan(abs(y2-y1) / abs(x2-x1))
+    return dir
+
+def getOrientationLine(line):
     orientation = math.atan2(abs((line[0] - line[2])), abs((line[1] - line[3])))
     return math.degrees(orientation)
 
@@ -353,7 +444,11 @@ def single(path):
 
     img = detect(img)
 
-    cv2.imshow('frame', img)
+    dim = (640, 480)
+    # resize image
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+    cv2.imshow('frame', resized)
     cv2.imwrite('results/' + path + '.jpg', img)
 
     ch = cv2.waitKey(0)
