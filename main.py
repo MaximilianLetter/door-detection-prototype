@@ -556,7 +556,7 @@ def single(path):
 
     img = detect(img)
 
-    dim = (640, 480)
+    dim = (450, 600)
     # resize image
     resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
 
