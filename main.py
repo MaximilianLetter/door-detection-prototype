@@ -5,10 +5,13 @@ import math
 
 
 def detect(img):
+    roiOffset = 5
     img = resize(img, 120)
+    width, height = img.shape[:2]
+    # img = img[roiOffset:width-roiOffset, roiOffset:height-roiOffset]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    blurred = cv2.GaussianBlur(gray, (5,5), 0.8)
+    blurred = cv2.GaussianBlur(gray, (3,3), 0.5)
 
     # Auto thresholds for now
     sigma = 0.33
@@ -34,7 +37,7 @@ def detect(img):
     # success, img = sal.computeSaliency(img)
 
     # Option 5: Corners
-    img = useCorners(img, edges)
+    img = useCorners(img, edges, gray)
 
     # ctest1 = [1, 0]
     # ctest2 = [0, 600]
@@ -43,14 +46,21 @@ def detect(img):
 
     return img
 
-def useCorners(img, edges):
-    corners = cv2.goodFeaturesToTrack(edges, 100, 0.1, 10)
+def useCorners(img, edges, gray):
+    # corners = cv2.goodFeaturesToTrack(edges, 50, 0.1, 10)
+    off = 15
+    roi = [off, edges.shape[0] - off, off, edges.shape[1] - off]
+    mask = np.zeros_like(gray)
+    mask[roi[0]:roi[1], roi[2]:roi[3]] = 255
+
+    corners = cv2.goodFeaturesToTrack(gray, 50, 0.05, 5, mask=mask)
+
     for c in corners:
         x, y = c.ravel()
         cv2.circle(img, (x, y), 3, (0, 0, 255), -1)
     print(len(corners))
 
-    # TODO
+    # Group corners
     c_groups = groupCorners(corners, edges)
 
     # DRAW DOOR POSTS
@@ -59,17 +69,45 @@ def useCorners(img, edges):
     #     c2 = tuple(g[1])
     #     cv2.line(img, c1, c2, (0, 255, 0))
 
+    # DRAW ALL CANDIDATES
+    # for g in c_groups:
+    #     pts = np.array([g], np.int32)
+    #     pts = pts.reshape((-1,1,2))
+    #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+    # Evaluate found groups and do further processing
+    # edges = cv2.dilate(edges, (7,7), iterations=3)
+    cv2.imshow('edges', edges)
+
+    doors = []
+    doorsRanking = []
     for g in c_groups:
-        pts = np.array([g], np.int32)
+        percentage = testCandidate(g, edges)
+        print(percentage)
+        if percentage > 0.7:
+            doors.append(g)
+            doorsRanking.append(percentage)
+
+        # if percentage > 0.1:
+        #     pts = np.array([g], np.int32)
+        #     pts = pts.reshape((-1,1,2))
+        #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+    # for door in doors:
+    #     pts = np.array([door], np.int32)
+    #     pts = pts.reshape((-1,1,2))
+    #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+    if len(doors):
+        door = doors[np.argmax(doorsRanking)]
+        pts = np.array([door], np.int32)
         pts = pts.reshape((-1,1,2))
         cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     return img
 
-# TODO
 def groupCorners(corners, img):
     height, width = img.shape[:2]
-    print('SHAPE', height, width)
 
     THRESH_DIST_MAX = height * 0.8
     THRESH_DIST_MIN = height * 0.4
@@ -167,6 +205,57 @@ def groupCorners(corners, img):
     print('CORNERGROUPS', len(cornerGroups))
 
     return cornerGroups
+
+def testCandidate(corners, edges):
+    # lineImg = np.zeros(edges.shape)
+    p1, p2, p3, p4 = corners
+
+    # NOTE: bottom line is not checked
+    lines = [
+        [p4, p1],
+        [p1, p2],
+        [p2, p3]
+    ]
+
+    percentages = []
+
+    for line in lines:
+        p1, p2 = line
+        maskImg = np.zeros(edges.shape)
+        cv2.line(maskImg, tuple(p1), tuple(p2), 1, 2)
+
+        roi = edges[maskImg == 1]
+
+        # percentage = np.count_nonzero(roi) / len(roi)
+        percentage = np.count_nonzero(roi) / getDistance(p1, p2)
+        percentage = min(percentage, 1.0)
+
+        # print('LINE', percentage)
+        # cv2.imshow('test', maskImg)
+        # cv2.waitKey(0)
+
+        if percentage < 0.4:
+            return 0
+
+        percentages.append(percentage)
+    # pts = np.array([corners], np.int32)
+    # pts = pts.reshape((-1,1,2))
+    # cv2.polylines(lineImg, [pts], True, 1, 1, cv2.LINE_AA)
+
+    # extract the part of the drawn lines
+    # roi = edges[lineImg == 1]
+    #
+    # percentage = np.count_nonzero(roi) / len(roi)
+    # print('::::')
+    # print(len(roi))
+    # print(np.count_nonzero(roi))
+    # print(percentage)
+
+    # cv2.imshow('edges', edges)
+
+
+
+    return np.mean(percentages)
 
 def fldOperations(img):
     fld = cv2.ximgproc.createFastLineDetector()
@@ -424,6 +513,9 @@ def resize(img, width):
 
 def stream():
     cap = cv2.VideoCapture(0)
+    frame_width = int(cap.get(3))
+    frame_height = int(cap.get(4))
+    out = cv2.VideoWriter('results/video.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (frame_width,frame_height))
 
     while True:
         ret_cam, frame = cap.read()
@@ -434,9 +526,13 @@ def stream():
 
         frame = detect(frame)
 
+        frame = cv2.resize(frame, (frame_width, frame_height), interpolation = cv2.INTER_AREA)
+
         cv2.imshow('frame', frame)
+        out.write(frame)
 
     cap.release()
+    out.release()
     cv2.destroyAllWindows()
 
 def single(path):
