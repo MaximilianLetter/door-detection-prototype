@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import math
 
-
+# Detection method that gets used in all cases
 def detect(img):
     roiOffset = 5
     img = resize(img, 120)
@@ -46,8 +46,10 @@ def detect(img):
 
     return img
 
+# START---Detection of doors with the use of corners and edges
 def useCorners(img, edges, gray):
     # corners = cv2.goodFeaturesToTrack(edges, 50, 0.1, 10)
+
     off = 15
     roi = [off, edges.shape[0] - off, off, edges.shape[1] - off]
     mask = np.zeros_like(gray)
@@ -83,15 +85,10 @@ def useCorners(img, edges, gray):
     doorsRanking = []
     for g in c_groups:
         percentage = testCandidate(g, edges)
-        print(percentage)
+
         if percentage > 0.7:
             doors.append(g)
             doorsRanking.append(percentage)
-
-        # if percentage > 0.1:
-        #     pts = np.array([g], np.int32)
-        #     pts = pts.reshape((-1,1,2))
-        #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     # for door in doors:
     #     pts = np.array([door], np.int32)
@@ -256,7 +253,9 @@ def testCandidate(corners, edges):
 
 
     return np.mean(percentages)
+# END---Detection of doors with the use of corners and edges
 
+# START---Detection of doors with lines from FastLineDetector
 def fldOperations(img):
     fld = cv2.ximgproc.createFastLineDetector()
     lines = fld.detect(img)
@@ -334,58 +333,6 @@ def groupLines(lines, dist_thresh, ori_thresh):
     print('MERGED: ', len(lines) - len(seen))
     return seen
 
-
-def getOrientationDifferences(line1, line2):
-    ori1 = getOrientation(line1)
-    ori2 = getOrientation(line2)
-
-    return abs(ori1-ori2)
-
-def getDistanceLines(line1, line2, merge=False):
-    # x1, y1, x2, y2 = line1.ravel()
-    # x1_, y1_, x2_, y2_ = line2.ravel()
-    x1, y1, x2, y2 = line1
-    x1_, y1_, x2_, y2_ = line2
-
-    dist1 = getDistance((x1, y1), (x1_, y1_))
-    dist2 = getDistance((x2, y2), (x2_, y2_))
-    dist3 = getDistance((x1, y1), (x2_, y2_))
-    dist4 = getDistance((x2, y2), (x1_, y1_))
-
-    if not merge:
-        dist = min(dist1, dist2, dist3, dist4)
-        return dist
-    else:
-        dist = max(dist1, dist2, dist3, dist4)
-        if dist1 == dist:
-            new_line = [x1, y1, x1_, y1_]
-        elif dist2 == dist:
-            new_line = [x2, y2, x2_, y2_]
-        elif dist3 == dist:
-            new_line = [x1, y1, x2_, y2_]
-        else:
-            new_line = [x2, y2, x1_, y1_]
-
-        return new_line
-
-def getDistance(p1, p2):
-    x1, y1 = p1
-    x2, y2 = p2
-    return np.sqrt((x1-x2)**2 + (y1-y2)**2)
-
-def getOrientation(p1, p2):
-    x1, y1 = p1
-    x2, y2 = p2
-
-    dir = 179
-    if x1 != x2:
-        dir = (2 / np.pi) * np.arctan(abs(y2-y1) / abs(x2-x1))
-    return dir
-
-def getOrientationLine(line):
-    orientation = math.atan2(abs((line[0] - line[2])), abs((line[1] - line[3])))
-    return math.degrees(orientation)
-
 def findRectFromLines(hor_lines, vert_lines, w, h):
     """
     Naive algorithm for detecting a rectangle.
@@ -451,7 +398,69 @@ def findRectFromLines(hor_lines, vert_lines, w, h):
                     door_corners = [[x1, y1], [x2, y2]]
 
     return candidates
+# END---Deteciton of doors with lines from FastLineDetector
 
+# Helper functions
+def getOrientationDifferences(line1, line2):
+    ori1 = getOrientation(line1)
+    ori2 = getOrientation(line2)
+
+    return abs(ori1-ori2)
+
+def getDistanceLines(line1, line2, merge=False):
+    # x1, y1, x2, y2 = line1.ravel()
+    # x1_, y1_, x2_, y2_ = line2.ravel()
+    x1, y1, x2, y2 = line1
+    x1_, y1_, x2_, y2_ = line2
+
+    dist1 = getDistance((x1, y1), (x1_, y1_))
+    dist2 = getDistance((x2, y2), (x2_, y2_))
+    dist3 = getDistance((x1, y1), (x2_, y2_))
+    dist4 = getDistance((x2, y2), (x1_, y1_))
+
+    if not merge:
+        dist = min(dist1, dist2, dist3, dist4)
+        return dist
+    else:
+        dist = max(dist1, dist2, dist3, dist4)
+        if dist1 == dist:
+            new_line = [x1, y1, x1_, y1_]
+        elif dist2 == dist:
+            new_line = [x2, y2, x2_, y2_]
+        elif dist3 == dist:
+            new_line = [x1, y1, x2_, y2_]
+        else:
+            new_line = [x2, y2, x1_, y1_]
+
+        return new_line
+
+def getDistance(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    return np.sqrt((x1-x2)**2 + (y1-y2)**2)
+
+def getOrientation(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+
+    dir = 179
+    if x1 != x2:
+        dir = (2 / np.pi) * np.arctan(abs(y2-y1) / abs(x2-x1))
+    return dir
+
+def getOrientationLine(line):
+    orientation = math.atan2(abs((line[0] - line[2])), abs((line[1] - line[3])))
+    return math.degrees(orientation)
+
+def resize(img, width):
+    h, w = img.shape[:2]
+    height = int(h * (width / w))
+    dim = (width, height)
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+    return resized
+
+# No longer used methods
 def lsdOperations(img):
     lsd = cv2.createLineSegmentDetector(0)
     lines = lsd.detect(img)[0]
@@ -503,22 +512,29 @@ def showLines(img, lines):
 
     return img
 
-def resize(img, width):
-    h, w = img.shape[:2]
-    height = int(h * (width / w))
-    dim = (width, height)
-    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+# Decision on input
+def stream(input = 0):
+    fullPath = 0
+    webCam = True
 
-    return resized
+    if input != 0:
+        fullPath = 'videos/' + input + '.mp4'
+        webCam = False
 
-def stream():
-    cap = cv2.VideoCapture(0)
-    frame_width = int(cap.get(3))
-    frame_height = int(cap.get(4))
-    out = cv2.VideoWriter('results/video.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, (frame_width,frame_height))
+    cap = cv2.VideoCapture(fullPath)
+
+    if webCam:
+        resultSize = (int(cap.get(3)), int(cap.get(4)))
+    else:
+        resultSize = (450, 600)
+
+    out = cv2.VideoWriter('results/video.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, resultSize)
 
     while True:
         ret_cam, frame = cap.read()
+
+        if not webCam:
+            frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
         ch = cv2.waitKey(1) & 0xFF
         if ch == ord('q') or ch == 27:
@@ -526,7 +542,7 @@ def stream():
 
         frame = detect(frame)
 
-        frame = cv2.resize(frame, (frame_width, frame_height), interpolation = cv2.INTER_AREA)
+        frame = cv2.resize(frame, resultSize, interpolation = cv2.INTER_AREA)
 
         cv2.imshow('frame', frame)
         out.write(frame)
@@ -549,13 +565,15 @@ def single(path):
 
     ch = cv2.waitKey(0)
 
-
 # USAGE
 # python main.py door_X --> single image
 # python main.py --> stream
 def main():
     if len(sys.argv) > 1:
-        single(sys.argv[1])
+        if sys.argv[1] == 'vid':
+            stream(sys.argv[2])
+        else:
+            single(sys.argv[1])
     else:
         stream()
 
