@@ -359,7 +359,7 @@ def processLines(lines):
     # Seperate in horizontal and vertical lines
     for line in lines:
         line = line[0]
-        ori = getOrientation(line)
+        ori = getOrientationLine(line)
 
         if 45 < ori < 135:
             lines_hor.append(line)
@@ -474,8 +474,8 @@ def findRectFromLines(hor_lines, vert_lines, w, h):
 
 # Helper functions
 def getOrientationDifferences(line1, line2):
-    ori1 = getOrientation(line1)
-    ori2 = getOrientation(line2)
+    ori1 = getOrientationLine(line1)
+    ori2 = getOrientationLine(line2)
 
     return abs(ori1-ori2)
 
