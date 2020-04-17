@@ -542,20 +542,22 @@ def lsdOperations(img):
 
 def houghOperations(img, edges):
     # Experiment extracting vertical and horizontal lines, standard Hough Transform
-    # lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
-    # vert_lines = [line for line in lines if (abs(line[0][1]) < 0.1 or abs(line[0][1]) > np.pi * 2 - 0.1)]
-    # hor_lines = [line for line in lines if (abs(line[0][1]) > (np.pi / 2)-0.1 and abs(line[0][1]) < (np.pi / 2) + 0.1)]
-    #
-    # img = showLines(img, vert_lines)
-    # img = showLines(img, hor_lines)
+    lines = cv2.HoughLines(edges, 1, np.pi/180, 60)
+    if lines is not None:
+        print(len(lines))
+        vert_lines = [line for line in lines if (abs(line[0][1]) < 0.1 or abs(line[0][1]) > np.pi * 2 - 0.1)]
+        hor_lines = [line for line in lines if (abs(line[0][1]) > (np.pi / 2)-0.1 and abs(line[0][1]) < (np.pi / 2) + 0.1)]
+        #
+        img = showLines(img, vert_lines)
+        img = showLines(img, hor_lines)
 
     # Experiment extracting vertical and horizontal lines, probabilistic Hough Transform
-    lines = cv2.HoughLinesP(edges, 5, np.pi/180, 10, 50, 5)
+    # lines = cv2.HoughLinesP(edges, 5, np.pi/180, 10, 50, 5)
 
     # straight_lines = [l for l in lines if direction(l[0][0], l[0][1], l[0][2], l[0][3]) == 0]
     # img = showLines(img, straight_lines)
 
-    img = showLines(img, lines)
+    # img = showLines(img, lines)
 
     return img
 
