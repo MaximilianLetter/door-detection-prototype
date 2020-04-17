@@ -5,13 +5,24 @@ import math
 
 # Detection method that gets used in all cases
 def detect(img):
-    roiOffset = 5
     img = resize(img, 120)
     width, height = img.shape[:2]
-    # img = img[roiOffset:width-roiOffset, roiOffset:height-roiOffset]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    blurred = cv2.GaussianBlur(gray, (3,3), 0.5)
+    # blurred = cv2.GaussianBlur(gray, (3,3), 0)
+    # cv2.imshow('blur1', blurred)
+    # blurred = cv2.GaussianBlur(gray, (3,3), 1.5)
+    # cv2.imshow('blur2', blurred)
+    # blurred = cv2.GaussianBlur(gray, (3,3), 2.9)
+    # cv2.imshow('blur3', blurred)
+    # blurred = cv2.GaussianBlur(gray, (5,5), 0)
+    # cv2.imshow('blur4', blurred)
+    # blurred = cv2.GaussianBlur(gray, (5,5), 1.5)
+    # cv2.imshow('blur5', blurred)
+    # blurred = cv2.GaussianBlur(gray, (5,5), 2.9)
+    # cv2.imshow('blur6', blurred)
+
+    blurred = cv2.GaussianBlur(gray, (3,3), 2.5)
 
     # Auto thresholds for now
     sigma = 0.33
@@ -19,7 +30,22 @@ def detect(img):
     lower = int(max(0, (1.0 - sigma) * v))
     upper = int(min(255, (1.0 + sigma) * v))
 
-    edges = cv2.Canny(blurred, lower, upper)
+    # edges = cv2.Canny(blurred, lower, upper)
+    # cv2.imshow('edges1', edges)
+    # edges = cv2.Canny(blurred, lower*2, upper)
+    # cv2.imshow('edges2', edges)
+    # edges = cv2.Canny(blurred, lower, upper*2)
+    # cv2.imshow('edges3', edges)
+    # edges = cv2.Canny(blurred, lower/2, upper)
+    # cv2.imshow('edges4', edges)
+    # edges = cv2.Canny(blurred, lower, upper/2)
+    # cv2.imshow('edges5', edges)
+    # edges = cv2.Canny(blurred, lower/2, upper*2)
+    # cv2.imshow('edges6', edges)
+    # edges = cv2.Canny(blurred, lower*2, upper/2)
+    # cv2.imshow('edges7', edges)
+
+    edges = cv2.Canny(blurred, lower/2, upper)
 
     # OPTION 1: Hough Transform for extracting lines
     # img = houghOperations(img, edges)
