@@ -75,7 +75,6 @@ def detect(img):
 # START---Detection of doors with the use of corners and edges
 def useCorners(img, edges, gray):
     # corners = cv2.goodFeaturesToTrack(edges, 50, 0.1, 10)
-
     off = 15
     roi = [off, edges.shape[0] - off, off, edges.shape[1] - off]
     mask = np.zeros_like(gray)
@@ -113,8 +112,8 @@ def useCorners(img, edges, gray):
         percentage = testCandidate(g, edges)
 
         if percentage > 0.7:
-            doors.append(g)
             doorsRanking.append(percentage)
+            doors.append(g)
 
     # for door in doors:
     #     pts = np.array([door], np.int32)
@@ -122,7 +121,7 @@ def useCorners(img, edges, gray):
     #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     if len(doors):
-        door = doors[np.argmax(doorsRanking)]
+        door = chooseBestCandidate(doors, doorsRanking, gray)
         pts = np.array([door], np.int32)
         pts = pts.reshape((-1,1,2))
         cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
@@ -175,7 +174,7 @@ def groupCorners(corners, img):
     THRESH_DIST_MAX = THRESH_DIST_MAX * 0.5
     THRESH_DIST_MIN = THRESH_DIST_MIN * 0.5
 
-    THRESH_ORI_MAX = 20
+    THRESH_ORI_MAX = 10
 
     cornerGroups = []
     done = np.zeros(len(doorPosts))
@@ -199,7 +198,7 @@ def groupCorners(corners, img):
 
             # if the length of door posts is too different -> continue
             lengthDiff = abs(length1 - length2)
-            if lengthDiff > length1 * 0.25 or lengthDiff > length2 * 0.25:
+            if lengthDiff > length1 * 0.15 or lengthDiff > length2 * 0.15:
                 continue
 
             distance = getDistance(c11, c21)
@@ -279,6 +278,53 @@ def testCandidate(corners, edges):
 
 
     return np.mean(percentages)
+
+def chooseBestCandidate(doors, scores, img):
+    diagonals = []
+    colorDiffs = []
+    for corners in doors:
+        diagonal = getDistance(corners[0], corners[2])
+        diagonals.append(diagonal)
+
+        # print(corners[:,0])
+        # left = int(min(corners[:,0]))
+        # right = int(max(corners[:,0]))
+        # bottom = int(min(corners[:,1]))
+        # top = int(max(corners[:,1]))
+        left = int(min(corners[0][0], corners[2][0]))
+        right = int(max(corners[0][0], corners[2][0]))
+        top = int(max(corners[0][1], corners[2][1]))
+        bottom = int(min(corners[0][1], corners[2][1]))
+
+        mask = np.zeros(img.shape, np.uint8)
+        mask[left:right, bottom:top] = 255
+        # maskInv = 255 - mask
+        maskInv = cv2.bitwise_not(mask)
+
+        #TODO this does not work
+        # print(mask)
+        #
+        # cv2.imshow('test', cv2.bitwise_and(img, img, mask=mask))
+        # cv2.waitKey(0)
+
+        inner = np.median(cv2.bitwise_and(img, img, mask=mask))
+        outer = np.median(cv2.bitwise_and(img, img, mask=maskInv))
+        colorDiff = abs(inner - outer)
+        colorDiffs.append(colorDiff)
+
+    # Give bonus for maximum diagonal
+    # print('SCORES PRE:', scores)
+    index = np.array(diagonals).argmax()
+    scores[index] = scores[index] * 1.25
+    index = np.array(colorDiffs).argmax()
+    scores[index] = scores[index] * 1.25
+    # print('SCORES AFTER:', scores)
+
+    result = doors[np.array(scores).argmax()]
+
+    return result
+
+
 # END---Detection of doors with the use of corners and edges
 
 # START---Detection of doors with lines from FastLineDetector
@@ -573,8 +619,8 @@ def stream(input = 0):
         cv2.imshow('frame', frame)
         out.write(frame)
 
-    cap.release()
     out.release()
+    cap.release()
     cv2.destroyAllWindows()
 
 def single(path):
