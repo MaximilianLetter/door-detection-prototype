@@ -7,7 +7,7 @@ import math
 def detect(img):
     img = resize(img, 120)
     width, height = img.shape[:2]
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # blurred = cv2.GaussianBlur(gray, (3,3), 0)
     # cv2.imshow('blur1', blurred)
@@ -22,13 +22,7 @@ def detect(img):
     # blurred = cv2.GaussianBlur(gray, (5,5), 2.9)
     # cv2.imshow('blur6', blurred)
 
-    blurred = cv2.GaussianBlur(gray, (3,3), 2.5)
 
-    # Auto thresholds for now
-    sigma = 0.33
-    v = np.median(blurred)
-    lower = int(max(0, (1.0 - sigma) * v))
-    upper = int(min(255, (1.0 + sigma) * v))
 
     # edges = cv2.Canny(blurred, lower, upper)
     # cv2.imshow('edges1', edges)
@@ -45,7 +39,7 @@ def detect(img):
     # edges = cv2.Canny(blurred, lower*2, upper/2)
     # cv2.imshow('edges7', edges)
 
-    edges = cv2.Canny(blurred, lower/2, upper)
+    # edges = cv2.Canny(blurred, lower/2, upper)
 
     # OPTION 1: Hough Transform for extracting lines
     # img = houghOperations(img, edges)
@@ -63,15 +57,47 @@ def detect(img):
     # success, img = sal.computeSaliency(img)
 
     # Option 5: Corners
-    # img = useCorners(img, edges, gray)
+    img = useCorners(img)
 
     # Option 6: Shapes
-    img = useShapeDetection(img, edges, gray)
+    # img = useShapeDetection(img, edges, gray)
 
     return img
 
 # START---Detection of doors with the use of corners and edges
-def useCorners(img, edges, gray):
+def useCorners(img):
+
+    # cv2.imshow('og', img)
+    # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # blurred = cv2.GaussianBlur(gray, (3,3), 2.5)
+    #
+    # # Auto thresholds for now
+    # sigma = 0.33
+    # v = np.median(blurred)
+    # lower = int(max(0, (1.0 - sigma) * v))
+    # upper = int(min(255, (1.0 + sigma) * v))
+    #
+    # edges = cv2.Canny(blurred, lower/2, upper)
+    # cv2.imshow('edges1', edges)
+
+######## contrast inrease #############
+    img = cv2.addWeighted(img, 1.5, img, 0, 0)
+    cv2.imshow('buf', img)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    blurred = cv2.GaussianBlur(gray, (3,3), 2.5)
+
+    # Auto thresholds for now
+    sigma = 0.33
+    v = np.median(blurred)
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+
+    edges = cv2.Canny(blurred, lower/2, upper)
+    cv2.imshow('edges2', edges)
+
+
     # corners = cv2.goodFeaturesToTrack(edges, 50, 0.1, 10)
     off = 15
     roi = [off, edges.shape[0] - off, off, edges.shape[1] - off]
@@ -86,7 +112,7 @@ def useCorners(img, edges, gray):
     print(len(corners))
 
     # Group corners
-    c_groups = groupCorners(corners, edges)
+    c_groups = groupCorners(corners, edges, img)
 
     # DRAW DOOR POSTS
     # for g in c_groups:
@@ -102,31 +128,39 @@ def useCorners(img, edges, gray):
 
     # Evaluate found groups and do further processing
     # edges = cv2.dilate(edges, (7,7), iterations=3)
-    cv2.imshow('edges', edges)
+
+
+    # edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, (7, 7), iterations=3)
+    #
+    # cv2.imshow('edges_', edges)
 
     doors = []
     doorsRanking = []
     for g in c_groups:
         percentage = testCandidate(g, edges)
 
-        if percentage > 0.7:
+        if percentage > 0.85:
             doorsRanking.append(percentage)
             doors.append(g)
 
-    # for door in doors:
-    #     pts = np.array([door], np.int32)
-    #     pts = pts.reshape((-1,1,2))
-    #     cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+    for door in doors:
+        pts = np.array([door], np.int32)
+        pts = pts.reshape((-1,1,2))
+        cv2.polylines(img, [pts], True, (255,0,0), 1, cv2.LINE_AA)
+        # cv2.imshow('test',img)
+        # cv2.waitKey(0)
+
+    print('CANDIDATES', len(doors))
 
     if len(doors):
         door = chooseBestCandidate(doors, doorsRanking, gray)
         pts = np.array([door], np.int32)
         pts = pts.reshape((-1,1,2))
-        cv2.polylines(img, [pts], True, (0,255,255), 5, cv2.LINE_AA)
+        cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     return img
 
-def groupCorners(corners, img):
+def groupCorners(corners, img, showImg):
     height, width = img.shape[:2]
 
     THRESH_DIST_MAX = height * 0.8
@@ -134,7 +168,7 @@ def groupCorners(corners, img):
 
     # Goal is as high as possible somehow
     THRESH_ORI_MAX = 180
-    THRESH_ORI_MIN = 54
+    THRESH_ORI_MIN = 50
 
     doorPosts = []
 
@@ -168,6 +202,16 @@ def groupCorners(corners, img):
         done[i] = True
 
     print('DOORPOSTS', len(doorPosts))
+
+    # DRAW DOOR POSTS
+    # for g in doorPosts:
+    #     c1 = tuple(g[0])
+    #     c2 = tuple(g[1])
+    #     cv2.line(showImg, c1, c2, (0, 255, 0))
+    #
+    # cv2.imshow('doorposts', showImg)
+    # cv2.waitKey(0)
+
 
     THRESH_DIST_MAX = THRESH_DIST_MAX * 0.6
     THRESH_DIST_MIN = THRESH_DIST_MIN * 0.6
@@ -234,12 +278,14 @@ def testCandidate(corners, edges):
     lines = [
         [p4, p1],
         [p1, p2],
-        [p2, p3]
+        [p2, p3],
+        [p3, p4] #bottom line
     ]
 
     percentages = []
+    bonus = 0
 
-    for line in lines:
+    for i, line in enumerate(lines):
         p1, p2 = line
         maskImg = np.zeros(edges.shape)
         cv2.line(maskImg, tuple(p1), tuple(p2), 1, 2)
@@ -253,6 +299,10 @@ def testCandidate(corners, edges):
         # print('LINE', percentage)
         # cv2.imshow('test', maskImg)
         # cv2.waitKey(0)
+
+        if i == 3:
+            bonus = percentage / 4
+            break
 
         if percentage < 0.4:
             return 0
@@ -273,9 +323,9 @@ def testCandidate(corners, edges):
 
     # cv2.imshow('edges', edges)
 
+    score = np.average(percentages) + bonus
 
-
-    return np.mean(percentages)
+    return score
 
 def chooseBestCandidate(doors, scores, img):
     diagonals = []
@@ -313,12 +363,13 @@ def chooseBestCandidate(doors, scores, img):
     # Give bonus for maximum diagonal
     # print('SCORES PRE:', scores)
     index = np.array(diagonals).argmax()
-    scores[index] = scores[index] * 1.25
+    scores[index] = scores[index] * 1.2
     index = np.array(colorDiffs).argmax()
-    scores[index] = scores[index] * 1.25
+    scores[index] = scores[index] * 1.2
     # print('SCORES AFTER:', scores)
 
     result = doors[np.array(scores).argmax()]
+    print('WINNING SCORE: ', max(scores))
 
     return result
 # END---Detection of doors with the use of corners and edges
