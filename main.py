@@ -212,9 +212,9 @@ def groupCorners(corners, img, showImg):
     # cv2.imshow('doorposts', showImg)
     # cv2.waitKey(0)
 
-
-    THRESH_DIST_MAX = THRESH_DIST_MAX * 0.6
-    THRESH_DIST_MIN = THRESH_DIST_MIN * 0.6
+    # NOTE: these could be used but maybe doorpost length is enough
+    # THRESH_DIST_MAX = THRESH_DIST_MAX * 0.6
+    # THRESH_DIST_MIN = THRESH_DIST_MIN * 0.6
 
     THRESH_ORI_MAX = 10
 
@@ -243,12 +243,17 @@ def groupCorners(corners, img, showImg):
             if lengthDiff > length1 * 0.15 or lengthDiff > length2 * 0.15:
                 continue
 
+            # TODO look up real door aspect ratios
+            lengthAVG = (length1 + length2) / 2
+            minLength = lengthAVG * 0.35
+            maxLength = lengthAVG * 0.8
+
             distance = getDistance(c11, c21)
-            if distance < THRESH_DIST_MIN or distance > THRESH_DIST_MAX:
+            if distance < minLength or distance > maxLength:
                 continue
 
             distance = getDistance(c12, c22)
-            if distance < THRESH_DIST_MIN or distance > THRESH_DIST_MAX:
+            if distance < minLength or distance > maxLength:
                 continue
 
             orientation = np.degrees(getOrientation(c11, c21))
