@@ -63,12 +63,10 @@ def detect(img):
     # success, img = sal.computeSaliency(img)
 
     # Option 5: Corners
-    img = useCorners(img, edges, gray)
+    # img = useCorners(img, edges, gray)
 
-    # ctest1 = [1, 0]
-    # ctest2 = [0, 600]
-    #
-    # print(np.rad2deg(getOrientation(ctest1, ctest2)))
+    # Option 6: Shapes
+    img = useShapeDetection(img, edges, gray)
 
     return img
 
@@ -80,7 +78,7 @@ def useCorners(img, edges, gray):
     mask = np.zeros_like(gray)
     mask[roi[0]:roi[1], roi[2]:roi[3]] = 255
 
-    corners = cv2.goodFeaturesToTrack(gray, 50, 0.05, 5, mask=mask)
+    corners = cv2.goodFeaturesToTrack(gray, 40, 0.05, 10, mask=mask)
 
     for c in corners:
         x, y = c.ravel()
@@ -124,7 +122,7 @@ def useCorners(img, edges, gray):
         door = chooseBestCandidate(doors, doorsRanking, gray)
         pts = np.array([door], np.int32)
         pts = pts.reshape((-1,1,2))
-        cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+        cv2.polylines(img, [pts], True, (0,255,255), 5, cv2.LINE_AA)
 
     return img
 
@@ -132,7 +130,7 @@ def groupCorners(corners, img):
     height, width = img.shape[:2]
 
     THRESH_DIST_MAX = height * 0.8
-    THRESH_DIST_MIN = height * 0.4
+    THRESH_DIST_MIN = height * 0.3
 
     # Goal is as high as possible somehow
     THRESH_ORI_MAX = 180
@@ -171,8 +169,8 @@ def groupCorners(corners, img):
 
     print('DOORPOSTS', len(doorPosts))
 
-    THRESH_DIST_MAX = THRESH_DIST_MAX * 0.5
-    THRESH_DIST_MIN = THRESH_DIST_MIN * 0.5
+    THRESH_DIST_MAX = THRESH_DIST_MAX * 0.6
+    THRESH_DIST_MIN = THRESH_DIST_MIN * 0.6
 
     THRESH_ORI_MAX = 10
 
@@ -323,8 +321,6 @@ def chooseBestCandidate(doors, scores, img):
     result = doors[np.array(scores).argmax()]
 
     return result
-
-
 # END---Detection of doors with the use of corners and edges
 
 # START---Detection of doors with lines from FastLineDetector
@@ -471,6 +467,99 @@ def findRectFromLines(hor_lines, vert_lines, w, h):
 
     return candidates
 # END---Deteciton of doors with lines from FastLineDetector
+
+#START---Detecton of doors with shape approximation
+def useShapeDetection(img, edges, gray):
+    SIZE_MIN = 20
+
+    shapes = np.zeros(edges.shape)
+    height, width = edges.shape
+
+    blurred = cv2.GaussianBlur(gray, (3,3), 0)
+
+    # Auto thresholds for now
+    sigma = 0.33
+    v = np.median(blurred)
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+
+    edges = cv2.Canny(blurred, lower, upper)
+
+    # edges = cv2.dilate(edges, (3, 3))
+    # edges = cv2.erode(edges, (3, 3))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, (7, 7), iterations=3)
+
+    rectWidthOff = 10
+    rectHeightOff = 20
+    centerX = int(width / 2)
+    centerY = int(height / 2)
+    print(centerX, centerY)
+
+    rect = np.array([
+        [centerX - rectWidthOff, centerY - rectHeightOff],
+        [centerX - rectWidthOff, centerY + rectHeightOff],
+        [centerX + rectWidthOff, centerY + rectHeightOff],
+        [centerX + rectWidthOff, centerY - rectHeightOff]
+    ])
+
+    print(rect[0], rect[2])
+
+    # NOTE: rectangle can be filled aswell (line thickness -1, or cv2.FILLED)
+    edges_ = cv2.rectangle(edges, tuple(rect[0]), tuple(rect[2]), 255, cv2.FILLED)
+    # edges_ = cv2.fillPoly(edges, rect, 255)
+    cv2.imshow('edges_', edges_)
+
+    mask = np.zeros((height+2, width+2), np.uint8)
+
+    # Floodfill from point (0, 0)
+    cv2.floodFill(edges_, mask, (rect[0][0]-1, rect[0][1]-1), 255);
+    cv2.imshow('edges_2', edges_)
+
+    # NOTE this is probably just not working. too many holes that will result in overflown shapes
+
+    # gray > blur > canny > findContours > approxPolyDP
+    # img_, contours_, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    # # NOTE: ^ other method or mode could be useful
+    # # ___modes___
+    # # RETR_EXTERNAL
+    # # RETR_LIST
+    # # RETR_CCOMP
+    # # RETR_TREE
+    # # ___methods___
+    # # CHAIN_APPROX_SIMPLE
+    # # CHAIN_APPROX_NONE
+    # # CHAIN_APPROX_TC89_L1,CV_CHAIN_APPROX_TC89_KCOS
+    #
+    # contours = [cv2.approxPolyDP(cnt, 0.01*cv2.arcLength(cnt,True), True) for cnt in contours_]
+    # filteredContours = []
+    #
+    # for cnt in contours:
+    #
+    #     if len(cnt) < 4:
+    #         continue
+    #
+    #     size = cv2.contourArea(cnt)
+    #     if size < SIZE_MIN:
+    #         continue
+    #
+    #     pts = np.array([cnt], np.int32)
+    #     pts = pts.reshape((-1,1,2))
+    #     cv2.polylines(img, [pts], True, (0, 0, 255), 1, cv2.LINE_AA)
+    #     # cv2.polylines(img, [cv2.boundingRect(pts)], True, (0, 0, 255), 1, cv2.LINE_AA)
+    #
+    #     # cv2.rectangle( img, cv2.boundingRect(cnt)[::2], cv2.boundingRect(cnt)[1::2], (0, 255, 255), 1)
+    #     # cv2.polylines(shapes, [pts], True, 1, 1, cv2.LINE_AA)
+    #
+    #     filteredContours.append(cnt)
+    #
+    # cv2.imshow('test', shapes)
+    # cv2.imshow('edges', edges)
+    #
+    # print(len(contours))
+    # print(len(filteredContours))
+
+    return img
+#END---Detectino of doors with shape approximation
 
 # Helper functions
 def getOrientationDifferences(line1, line2):
