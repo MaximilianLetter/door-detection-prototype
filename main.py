@@ -163,7 +163,7 @@ def useCorners(img):
 def groupCorners(corners, img, showImg):
     height, width = img.shape[:2]
 
-    THRESH_DIST_MAX = height * 0.8
+    THRESH_DIST_MAX = height * 0.85
     THRESH_DIST_MIN = height * 0.3
 
     # Goal is as high as possible somehow
@@ -248,12 +248,17 @@ def groupCorners(corners, img, showImg):
             minLength = lengthAVG * 0.35
             maxLength = lengthAVG * 0.7
 
-            distance = getDistance(c11, c21)
-            if distance < minLength or distance > maxLength:
+            distanceTop = getDistance(c11, c21)
+            if distanceTop < minLength or distanceTop > maxLength:
                 continue
 
-            distance = getDistance(c12, c22)
-            if distance < minLength or distance > maxLength:
+            distanceBot = getDistance(c12, c22)
+            # NOTE: the bottom comparison is more helpful
+            # if distanceBot < minLength or distanceBot > maxLength:
+            #     continue
+
+            # first distance is top and more important
+            if distanceBot > distanceTop * 0.9:
                 continue
 
             orientation = np.degrees(getOrientation(c11, c21))
