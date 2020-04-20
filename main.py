@@ -246,7 +246,7 @@ def groupCorners(corners, img, showImg):
             # TODO look up real door aspect ratios
             lengthAVG = (length1 + length2) / 2
             minLength = lengthAVG * 0.35
-            maxLength = lengthAVG * 0.8
+            maxLength = lengthAVG * 0.7
 
             distance = getDistance(c11, c21)
             if distance < minLength or distance > maxLength:
@@ -335,8 +335,15 @@ def testCandidate(corners, edges):
 def chooseBestCandidate(doors, scores, img):
     diagonals = []
     colorDiffs = []
+    angleStability = []
     for corners in doors:
-        diagonal = getDistance(corners[0], corners[2])
+        # Unpack corners
+        botLeft, botRight, topRight, topLeft = corners
+
+        ### SIZE ###
+        # NOTE: maybe another way of size calculation instead of
+        # diagonal could be useful
+        diagonal = getDistance(botLeft, topRight)
         diagonals.append(diagonal)
 
         # print(corners[:,0])
@@ -344,10 +351,27 @@ def chooseBestCandidate(doors, scores, img):
         # right = int(max(corners[:,0]))
         # bottom = int(min(corners[:,1]))
         # top = int(max(corners[:,1]))
-        left = int(min(corners[0][0], corners[2][0]))
-        right = int(max(corners[0][0], corners[2][0]))
-        top = int(max(corners[0][1], corners[2][1]))
-        bottom = int(min(corners[0][1], corners[2][1]))
+
+        ### ANGLE STABILITY ###
+        angle1 = getCornerAngles(botLeft, topLeft, topRight)
+        angle2 = getCornerAngles(botRight, topRight, topLeft)
+        angle3 = getCornerAngles(topLeft, botLeft, botRight)
+        angle4 = getCornerAngles(botLeft, botRight, topRight)
+
+        # get overall similar angles
+        # mean = np.mean([angle1, angle2, angle3, angle4])
+        # angleDeviation = max([abs(mean - angle1), abs(mean - angle2), abs(mean - angle3), abs(mean - angle4)])
+        # angleStability.append(angleDeviation)
+
+        angleOpposite1 = abs(angle1 - angle4)
+        angleOpposite2 = abs(angle2 - angle3)
+        angleStability.append(angleOpposite1 + angleOpposite2)
+
+        ### COLOR DIFFS ###
+        left = int(min(botLeft[0], topLeft[0]))
+        right = int(max(botRight[0], topRight[0]))
+        top = int(max(topRight[1], topLeft[1]))
+        bottom = int(min(botLeft[1], botRight[1]))
 
         mask = np.zeros(img.shape, np.uint8)
         mask[left:right, bottom:top] = 255
@@ -365,11 +389,13 @@ def chooseBestCandidate(doors, scores, img):
         colorDiff = abs(inner - outer)
         colorDiffs.append(colorDiff)
 
-    # Give bonus for maximum diagonal
+    # NOTE: size could be very misleading
     # print('SCORES PRE:', scores)
     index = np.array(diagonals).argmax()
     scores[index] = scores[index] * 1.2
     index = np.array(colorDiffs).argmax()
+    scores[index] = scores[index] * 1.2
+    index = np.array(angleStability).argmin()
     scores[index] = scores[index] * 1.2
     # print('SCORES AFTER:', scores)
 
@@ -618,6 +644,15 @@ def useShapeDetection(img, edges, gray):
 #END---Detectino of doors with shape approximation
 
 # Helper functions
+def getCornerAngles(a, b, c):
+    ba = a - b
+    bc = c - b
+
+    cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+    angle = np.arccos(cosine_angle)
+
+    return np.degrees(angle)
+
 def getOrientationDifferences(line1, line2):
     ori1 = getOrientationLine(line1)
     ori2 = getOrientationLine(line2)
