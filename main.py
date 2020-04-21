@@ -2,12 +2,18 @@ import cv2
 import sys
 import numpy as np
 import math
+import time
 
 def detect(img):
     """
     Main detection function.
     Set up the image, gray image and edge image.
     """
+
+    print('###################')
+
+    overallTime = time.time()
+    startTime = time.time()
 
     # Sample the image down to 120 width image
     img = resize(img, 120)
@@ -42,16 +48,22 @@ def detect(img):
 
     # Generate corners to track and use for corner grouping
     corners = cv2.goodFeaturesToTrack(gray, 40, 0.05, 10, mask=mask)
-    print('CORNERS: ', len(corners))
+    # print('CORNERS:', len(corners))
 
     # Show corners for development
     for c in corners:
         x, y = c.ravel()
         cv2.circle(img, (x, y), 3, (0, 0, 255), -1)
 
+    print('_preperations_:', time.time() - startTime)
+    startTime = time.time()
+
     # Group corners to vertical lines that represent a door post
     doorPosts = cornersToDoorposts(corners, height)
-    print('DOORPOSTS: ', len(doorPosts))
+    # print('DOORPOSTS:', len(doorPosts))
+
+    print('_doorposts_:', time.time() - startTime)
+    startTime = time.time()
 
     # Show doorPosts for development
     # for g in doorPosts:
@@ -62,9 +74,13 @@ def detect(img):
     # cv2.imshow('doorposts', img)
     # cv2.waitKey(0)
 
+
     # Build candidates out of the door posts
     rectangles = buildRectangles(doorPosts)
-    print('RECTANGLES: ', len(rectangles))
+    # print('RECTANGLES: ', len(rectangles))
+
+    print('_rectangles_:', time.time() - startTime)
+    startTime = time.time()
 
     doors = []
     doorsRanking = []
@@ -76,7 +92,10 @@ def detect(img):
             doorsRanking.append(percentage)
             doors.append(rect)
 
-    print('CANDIDATES', len(doors))
+    # print('CANDIDATES', len(doors))
+
+    print('_candidates_:', time.time() - startTime)
+    startTime = time.time()
 
     # Show door candidates for development
     # for door in doors:
@@ -90,6 +109,10 @@ def detect(img):
         pts = np.array([door], np.int32)
         pts = pts.reshape((-1,1,2))
         cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+    print('_choosebest_:', time.time() - startTime)
+
+    print('_overall_:', time.time() - overallTime)
 
     return img
 
@@ -297,7 +320,6 @@ def chooseBestCandidate(doors, scores, img):
         right = int(max(botRight[0], topRight[0]))
         top = int(max(topRight[1], topLeft[1]))
         bottom = int(min(botLeft[1], botRight[1]))
-        print(left, right, top, bottom)
 
         mask = np.zeros(img.shape, np.uint8)
         mask[bottom:top, left:right] = 255
@@ -323,7 +345,7 @@ def chooseBestCandidate(doors, scores, img):
     scores[index] = scores[index] * UPVOTE_FACTOR
 
     result = doors[np.array(scores).argmax()]
-    print('WINNING SCORE: ', max(scores))
+    # print('WINNING SCORE: ', max(scores))
 
     return result
 
