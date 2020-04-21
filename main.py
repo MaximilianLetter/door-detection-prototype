@@ -74,10 +74,8 @@ def detect(img):
     # cv2.imshow('doorposts', img)
     # cv2.waitKey(0)
 
-
     # Build candidates out of the door posts
     rectangles = buildRectangles(doorPosts)
-    # print('RECTANGLES: ', len(rectangles))
 
     print('_rectangles_:', time.time() - startTime)
     startTime = time.time()
@@ -91,8 +89,6 @@ def detect(img):
         if percentage > RECT_THRESH:
             doorsRanking.append(percentage)
             doors.append(rect)
-
-    # print('CANDIDATES', len(doors))
 
     print('_candidates_:', time.time() - startTime)
     startTime = time.time()
@@ -113,6 +109,13 @@ def detect(img):
     print('_choosebest_:', time.time() - startTime)
 
     print('_overall_:', time.time() - overallTime)
+
+    print('STATS---------')
+    print('CORNERS:', len(corners))
+    print('DOORPOSTS:', len(doorPosts))
+    print('RECTANGLES:', len(rectangles))
+    print('CANDIDATES:', len(doors))
+    print('--------------')
 
     return img
 
@@ -177,6 +180,7 @@ def buildRectangles(doorPosts):
     ASPECT_RATIO_MAX = 0.7
 
     MAX_BOTTOM_LENGTH = 1.1
+    MIN_BOTTOM_LENGTH = 0.7
 
     cornerGroups = []
     done = np.zeros(len(doorPosts))
@@ -214,7 +218,7 @@ def buildRectangles(doorPosts):
                 continue
 
             distanceBot = getDistance(c12, c22)
-            if distanceBot > distanceTop * MAX_BOTTOM_LENGTH:
+            if distanceBot > distanceTop * MAX_BOTTOM_LENGTH or distanceBot < distanceTop * MIN_BOTTOM_LENGTH:
                 continue
 
             orientation = np.degrees(getOrientation(c11, c21))
