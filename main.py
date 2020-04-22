@@ -20,7 +20,7 @@ def detect(img):
     shape = img.shape[:2]
     height, width = shape
 
-    # Incrase contrast
+    # Incrase contrast, this a kind of workaround
     img = cv2.addWeighted(img, 1.5, img, 0, 0)
 
     # Convert to gray
@@ -48,7 +48,7 @@ def detect(img):
 
     # Generate corners to track and use for corner grouping
     corners = cv2.goodFeaturesToTrack(gray, 40, 0.05, 10, mask=mask)
-    # print('CORNERS:', len(corners))
+    # corners = cv2.goodFeaturesToTrack(gray, 50, 0.001, 7, mask=mask, useHarrisDetector=True)
 
     # Show corners for development
     for c in corners:
@@ -94,10 +94,10 @@ def detect(img):
     startTime = time.time()
 
     # Show door candidates for development
-    # for door in doors:
-    #     pts = np.array([door], np.int32)
-    #     pts = pts.reshape((-1,1,2))
-    #     cv2.polylines(img, [pts], True, (255,0,0), 1, cv2.LINE_AA)
+    for door in doors:
+        pts = np.array([door], np.int32)
+        pts = pts.reshape((-1,1,2))
+        cv2.polylines(img, [pts], True, (255,0,0), 1, cv2.LINE_AA)
 
     # Compare the candidates to get the best one and draw it
     if len(doors):
@@ -257,7 +257,7 @@ def testCandidate(corners, edges):
     bonus = 0
 
     LINE_WIDTH = 2
-    LINE_THRESH = 0.4
+    LINE_THRESH = 0.5
     BOT_LINE_BONUS = 0.25
 
     for i, line in enumerate(lines):
@@ -290,18 +290,14 @@ def chooseBestCandidate(doors, scores, img):
     Select the best candidate by comparing their scores. The scores get
     increased if special requirements are met.
     """
-    diagonals = []
-    colorDiffs = []
-    angleStability = []
-    for corners in doors:
-        # Unpack corners
-        botLeft, botRight, topRight, topLeft = corners
+    UPVOTE_FACTOR = 1.2
+    DOOR_IN_DOOR_DIFF_THRESH = 10 # pixels
+    COLOR_DIFF_THRESH = 50
+    ANGLE_DEVIATION_THRESH = 10
 
-        # Diagonal
-        # NOTE: maybe another way of size calculation instead of
-        # diagonal could be useful
-        diagonal = getDistance(botLeft, topRight)
-        diagonals.append(diagonal)
+    for i, corners in enumerate(doors):
+        # Unpack corners
+        topLeft, topRight, botRight, botLeft = corners
 
         # Angle stability
         angle1 = getCornerAngles(botLeft, topLeft, topRight)
@@ -312,7 +308,9 @@ def chooseBestCandidate(doors, scores, img):
         # Get overall similar angles
         mean = np.mean([angle1, angle2, angle3, angle4])
         angleDeviation = max([abs(mean - angle1), abs(mean - angle2), abs(mean - angle3), abs(mean - angle4)])
-        angleStability.append(angleDeviation)
+        print(angleDeviation)
+        if angleDeviation < ANGLE_DEVIATION_THRESH:
+            scores[i] = scores[i] * UPVOTE_FACTOR
 
         # Alternative check if opposing angles are similar
         # angleOpposite1 = abs(angle1 - angle4)
@@ -326,27 +324,39 @@ def chooseBestCandidate(doors, scores, img):
         bottom = int(min(botLeft[1], botRight[1]))
 
         mask = np.zeros(img.shape, np.uint8)
-        mask[bottom:top, left:right] = 255
+        mask[top:bottom, left:right] = 255 #top, bottom switched
         maskInv = cv2.bitwise_not(mask)
 
-        inner = np.median(cv2.bitwise_and(img, img, mask=mask))
-        outer = np.median(cv2.bitwise_and(img, img, mask=maskInv))
+        # inner = np.median(cv2.bitwise_and(img, img, mask=mask))
+        # outer = np.median(cv2.bitwise_and(img, img, mask=maskInv))
+
+        inner = np.average(img[mask == 255])
+        outer = np.average(img[maskInv == 255])
         colorDiff = abs(inner - outer)
-        colorDiffs.append(colorDiff)
+        if colorDiff > COLOR_DIFF_THRESH:
+            scores[i] = scores[i] * UPVOTE_FACTOR
 
-    UPVOTE_FACTOR = 1.2
+        # cv2.imshow('a', cv2.bitwise_and(img, img, mask=mask))
+        # cv2.imshow('b', cv2.bitwise_and(img, img, mask=maskInv))
 
-    # Biggest diagonal gets an upvote
-    index = np.array(diagonals).argmax()
-    scores[index] = scores[index] * UPVOTE_FACTOR
+        # Check if another door is part of this door
+        for corners2 in doors:
+            topLeft2, topRight2, botRight2, botLeft2 = corners2
 
-    # Biggest difference in color inside / outside gets an upvote
-    index = np.array(colorDiffs).argmax()
-    scores[index] = scores[index] * UPVOTE_FACTOR
+            if np.array_equal(corners, corners2):
+                continue
 
-    # Lowest angle difference gets an upvote
-    index = np.array(angleStability).argmin()
-    scores[index] = scores[index] * UPVOTE_FACTOR
+            if np.array_equal(topLeft, topLeft2) and np.array_equal(topRight, topRight2):
+                top2 = int(max(topRight2[1], topLeft2[1]))
+                bottom2 = int(min(botLeft2[1], botRight2[1]))
+
+                height = abs(top - bottom)
+                height2 = abs(top2 - bottom2)
+                diff = abs(height - height2)
+
+                if height > height2 and diff > DOOR_IN_DOOR_DIFF_THRESH:
+                    scores[i] = scores[i] * UPVOTE_FACTOR
+                    break
 
     result = doors[np.array(scores).argmax()]
     # print('WINNING SCORE: ', max(scores))
