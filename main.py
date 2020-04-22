@@ -102,9 +102,11 @@ def detect(img):
     # Compare the candidates to get the best one and draw it
     if len(doors):
         door = chooseBestCandidate(doors, doorsRanking, gray)
-        pts = np.array([door], np.int32)
-        pts = pts.reshape((-1,1,2))
-        cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+        # pts = np.array([door], np.int32)
+        # pts = pts.reshape((-1,1,2))
+        # cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+    else:
+        return False, [], img
 
     print('_choosebest_:', time.time() - startTime)
 
@@ -117,7 +119,7 @@ def detect(img):
     print('CANDIDATES:', len(doors))
     print('--------------')
 
-    return img
+    return True, door, img
 
 def cornersToDoorposts(corners, height):
     """
@@ -308,7 +310,6 @@ def chooseBestCandidate(doors, scores, img):
         # Get overall similar angles
         mean = np.mean([angle1, angle2, angle3, angle4])
         angleDeviation = max([abs(mean - angle1), abs(mean - angle2), abs(mean - angle3), abs(mean - angle4)])
-        print(angleDeviation)
         if angleDeviation < ANGLE_DEVIATION_THRESH:
             scores[i] = scores[i] * UPVOTE_FACTOR
 
@@ -362,6 +363,34 @@ def chooseBestCandidate(doors, scores, img):
     # print('WINNING SCORE: ', max(scores))
 
     return result
+
+# Smoothing video
+def checkDifferences(door, prev):
+    DIFF_THRESH_SMALL = 5
+    DIFF_THRESH_BIG = 10
+    diffCounter = 0
+
+    if prev == []:
+        return False, door
+
+    door = np.array(door)
+    prev = np.array(prev)
+
+    diffs = door - prev
+
+    for diff in diffs:
+        x, y = diff
+        x = abs(x)
+        y = abs(y)
+        if x > DIFF_THRESH_SMALL or y > DIFF_THRESH_SMALL:
+            diffCounter += 1
+            if x > DIFF_THRESH_BIG or y > DIFF_THRESH_BIG:
+                return False, []
+
+    if diffCounter > 2:
+        return False, []
+
+    return True, door
 
 # Helper functions
 def getCornerAngles(a, b, c):
@@ -419,6 +448,9 @@ def stream(input = 0):
 
     out = cv2.VideoWriter('results/video.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, resultSize)
 
+    previousDoor = []
+    prevCounter = 0
+
     while True:
         ret_cam, frame = cap.read()
 
@@ -429,7 +461,37 @@ def stream(input = 0):
         if ch == ord('q') or ch == 27:
             break
 
-        frame = detect(frame)
+        found, door, frame = detect(frame)
+
+        if found:
+            show, door = checkDifferences(door, previousDoor)
+            if show:
+                pts = np.array([door], np.int32)
+                pts = pts.reshape((-1,1,2))
+                cv2.polylines(frame, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+                previousDoor = door
+                prevCounter = 0
+            else:
+                pts = np.array([previousDoor], np.int32)
+                pts = pts.reshape((-1,1,2))
+                cv2.polylines(frame, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+                prevCounter += 1
+                if prevCounter > 2:
+                    prevCounter = 0
+                    previousDoor = door
+
+
+        else:
+            if previousDoor != []:
+                pts = np.array([previousDoor], np.int32)
+                pts = pts.reshape((-1,1,2))
+                cv2.polylines(frame, [pts], True, (0,255,255), 1, cv2.LINE_AA)
+
+                prevCounter += 1
+                if prevCounter > 2:
+                    previousDoor = []
+                    prevCounter = 0
 
         frame = cv2.resize(frame, resultSize, interpolation = cv2.INTER_AREA)
 
@@ -443,7 +505,7 @@ def stream(input = 0):
 def single(path):
     img = cv2.imread('images/' + path + '.jpg')
 
-    img = detect(img)
+    bool, door, img = detect(img)
 
     dim = (450, 600)
     # resize image
