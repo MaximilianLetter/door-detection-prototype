@@ -4,7 +4,7 @@ import numpy as np
 import math
 import time
 
-def detect(img):
+def detect(img, resolution):
     """
     Main detection function.
     Set up the image, gray image and edge image.
@@ -16,7 +16,7 @@ def detect(img):
     startTime = time.time()
 
     # Sample the image down to 120 width image
-    img = resize(img, 120)
+    img = resize(img, resolution)
     shape = img.shape[:2]
     height, width = shape
 
@@ -258,7 +258,7 @@ def testCandidate(corners, edges):
     percentages = []
     bonus = 0
 
-    LINE_WIDTH = 2
+    LINE_WIDTH = 3
     LINE_THRESH = 0.5
     BOT_LINE_BONUS = 0.25
 
@@ -293,7 +293,7 @@ def chooseBestCandidate(doors, scores, img):
     increased if special requirements are met.
     """
     UPVOTE_FACTOR = 1.2
-    DOOR_IN_DOOR_DIFF_THRESH = 10 # pixels
+    DOOR_IN_DOOR_DIFF_THRESH = img.shape[1] / 12 # in case of 120 width -> 10px
     COLOR_DIFF_THRESH = 50
     ANGLE_DEVIATION_THRESH = 10
 
@@ -365,9 +365,8 @@ def chooseBestCandidate(doors, scores, img):
     return result
 
 # Smoothing video
-def checkDifferences(door, prev):
-    DIFF_THRESH_SMALL = 5
-    DIFF_THRESH_BIG = 10
+def checkDifferences(door, prev, threshLower):
+    threshUpper = threshLower * 2
     diffCounter = 0
 
     if prev == []:
@@ -382,9 +381,9 @@ def checkDifferences(door, prev):
         x, y = diff
         x = abs(x)
         y = abs(y)
-        if x > DIFF_THRESH_SMALL or y > DIFF_THRESH_SMALL:
+        if x > threshLower or y > threshLower:
             diffCounter += 1
-            if x > DIFF_THRESH_BIG or y > DIFF_THRESH_BIG:
+            if x > threshUpper or y > threshUpper:
                 return False, []
 
     if diffCounter > 2:
@@ -448,8 +447,11 @@ def stream(input = 0):
 
     out = cv2.VideoWriter('results/video.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 20.0, resultSize)
 
+    resolution = 240
+
     previousDoor = []
     prevCounter = 0
+    DIFF_THRESH_SMALL = resolution / 24 # in 120 width -> 5px
 
     while True:
         ret_cam, frame = cap.read()
@@ -461,10 +463,10 @@ def stream(input = 0):
         if ch == ord('q') or ch == 27:
             break
 
-        found, door, frame = detect(frame)
+        found, door, frame = detect(frame, resolution)
 
         if found:
-            show, door = checkDifferences(door, previousDoor)
+            show, door = checkDifferences(door, previousDoor, DIFF_THRESH_SMALL)
             if show:
                 pts = np.array([door], np.int32)
                 pts = pts.reshape((-1,1,2))
@@ -505,7 +507,12 @@ def stream(input = 0):
 def single(path):
     img = cv2.imread('images/' + path + '.jpg')
 
-    bool, door, img = detect(img)
+    found, door, img = detect(img)
+
+    if found:
+        pts = np.array([door], np.int32)
+        pts = pts.reshape((-1,1,2))
+        cv2.polylines(img, [pts], True, (0,255,255), 1, cv2.LINE_AA)
 
     dim = (450, 600)
     # resize image
